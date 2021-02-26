@@ -1,0 +1,59 @@
+nu(){
+        d=$1
+        cat $d.alive | nuclei -t ~/nuclei-templates/ -o $d.nuclei
+}
+
+getdomain(){
+        d=$1
+        echo $d | assetfinder > $d.subs  && subfinder -d $d >> $d.subs && sort -u $d.subs -o $d.subs && cat $d.subs
+}
+
+getdomainalive(){
+        d=$1
+        echo $d | assetfinder > $d.subs  && subfinder -d $d >> $d.subs && sort -u $d.subs -o $d.subs && cat $d.subs | httpx --threads 150 > $d.alive && cat $d.alive
+}
+
+takeover(){
+        d=$1
+        subjack -c ~/tools/subjack/fingerprints.json -ssl -t 150 -w $d.subs -o $d.takeover
+}
+
+dirsearch(){
+	python3 ~/tools/dirsearch/dirsearch.py -r -t 150 -i 200 -e html,txt,json,log,php -u $1
+}
+
+scanport(){
+	sudo nmap -p- -A -sS --min-rate 1500 $1
+}
+
+aqua() {
+	d=$1
+	cat $d.subs | aquatone -chrome-path `which chromium` -ports medium -http-timeout 10000 -threads 50 -out $d
+}
+
+scandomaintakeover(){
+	folder='domain-takeover'
+	if [[ ! -d $folder ]]; then
+		mkdir $folder
+	fi
+	cd $folder
+
+	wget https://raw.githubusercontent.com/arkadiyt/bounty-targets-data/master/data/wildcards.txt
+
+	rm -rf *.tmp *.takeover *.amass
+	
+	cat wildcards.txt | grep -E '(^\*\.|\(\*\))' | grep -vE '\*$' | sed -E 's/(\*\.|\(\*\))//g' | while read domain
+	do 
+		d=$domain
+ 		echo $d | assetfinder > $d.subs
+		subfinder -d $d >> $d.subs
+		sort -u $d.subs -o $d.subs
+		subjack -c ~/tools/subjack/fingerprints.json -ssl -t 300 -w $d.subs -o $d.takeover
+	done
+
+	cat shopify.com.takeover | grep -vE '\[SHOPIFY\].*\.shopify\.com' > shopify.com.tmp
+	cat shopify.com.tmp > shopify.com.takeover
+	cat tumblr.com.takeover | grep -vE '[\TUMBLR\].*\.tumblr\.com' > tumblr.com.tmp
+	cat tumblr.com.tmp > tumblr.com.takeover
+	cat *.takeover | grep -vE '(\[GITHUB\].*\.github\.io$)' > takeover-all.txt && python3 ~/autobot-bb/autobot-takeover.py takeover-all.txt
+}
